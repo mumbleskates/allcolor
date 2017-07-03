@@ -37,8 +37,8 @@ public class ImgColor {
         assert bi != null;
         assert bi.getWidth() * bi.getHeight() <= 1<<24;
         assert Math.max(bi.getWidth(), bi.getHeight()) < 1<<15;
-        for (int x = 0; x < bi.getWidth(); x++) {
-            for (int y = 0; y < bi.getHeight(); y++) {
+        for (int y = 0; y < bi.getHeight(); y++) {
+            for (int x = 0; x < bi.getWidth(); x++) {
                 Color c = new Color(bi.getRGB(x, y));
                 ret.add(new Point(x, y, new color(c.getRed(), c.getGreen(), c.getBlue())));
             }
