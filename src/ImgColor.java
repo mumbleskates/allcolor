@@ -10,10 +10,10 @@ import javax.imageio.ImageIO;
 public class ImgColor {
 
     private static class Point {
-        public int x, y;
-        public color c;
+        int x, y;
+        color c;
 
-        public Point(int x, int y, color c) {
+        Point(int x, int y, color c) {
             this.x = x;
             this.y = y;
             this.c = c;
@@ -23,21 +23,18 @@ public class ImgColor {
     private static class color {
         char r, g, b;
 
-        public color(int i, int j, int k) {
+        color(int i, int j, int k) {
             r = (char) i;
             g = (char) j;
             b = (char) k;
         }
     }
 
-    public static LinkedList<Point> listFromImg(String path) {
+    private static LinkedList<Point> listFromImg(String path) throws IOException {
         LinkedList<Point> ret = new LinkedList<>();
-        BufferedImage bi = null;
-        try {
-            bi = ImageIO.read(new File(path));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        BufferedImage bi;
+        bi = ImageIO.read(new File(path));
+        assert bi != null;
         for (int x = 0; x < 4096; x++) {
             for (int y = 0; y < 4096; y++) {
                 Color c = new Color(bi.getRGB(x, y));
@@ -48,7 +45,7 @@ public class ImgColor {
         return ret;
     }
 
-    public static LinkedList<color> allColors() {
+    private static LinkedList<color> allColors() {
         LinkedList<color> colors = new LinkedList<>();
         for (int r = 0; r < 256; r++) {
             for (int g = 0; g < 256; g++) {
@@ -61,16 +58,16 @@ public class ImgColor {
         return colors;
     }
 
-    public static Double cDelta(color a, color b) {
+    private static Double cDelta(color a, color b) {
         return Math.pow(a.r - b.r, 2) + Math.pow(a.g - b.g, 2) + Math.pow(a.b - b.b, 2);
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         BufferedImage img = new BufferedImage(4096, 4096, BufferedImage.TYPE_INT_RGB);
         LinkedList<Point> orig = listFromImg(args[0]);
         LinkedList<color> toDo = allColors();
 
-        Point p = null;
+        Point p;
         while (orig.size() > 0 && (p = orig.pop()) != null) {
             color chosen = toDo.pop();
             for (int i = 0; i < Math.min(100, toDo.size()); i++) {
