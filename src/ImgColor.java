@@ -35,8 +35,10 @@ public class ImgColor {
         BufferedImage bi;
         bi = ImageIO.read(new File(path));
         assert bi != null;
-        for (int x = 0; x < 4096; x++) {
-            for (int y = 0; y < 4096; y++) {
+        assert bi.getWidth() * bi.getHeight() <= 1<<24;
+        assert Math.max(bi.getWidth(), bi.getHeight()) < 1<<15;
+        for (int x = 0; x < bi.getWidth(); x++) {
+            for (int y = 0; y < bi.getHeight(); y++) {
                 Color c = new Color(bi.getRGB(x, y));
                 ret.add(new Point(x, y, new color(c.getRed(), c.getGreen(), c.getBlue())));
             }
