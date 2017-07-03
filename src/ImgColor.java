@@ -8,6 +8,12 @@ import javax.imageio.ImageIO;
 
 public class ImgColor {
 
+    private static final long startTime = System.nanoTime();
+
+    private static void log(Object log) {
+        System.out.printf("%10.6f %s%n", (System.nanoTime() - startTime) / 1e9, log);
+    }
+
     private static void shuffleLongArray(long[] a, Random r) {
         long swap;
         int j;
@@ -82,17 +88,17 @@ public class ImgColor {
         final int COMPARISONS = 100;
 
         Random rand = new Random();
-        System.out.println("Loading...");
+        log("Loading");
         BufferedImage img = loadAcceptableImage(args[0]);
-        System.out.println("Building points and colors...");
+        log("Building points and colors");
         long[] points = getImagePoints(img);
         int[] todo = allColors();
         int[] alternate = new int[todo.length];
-        System.out.println("Shuffling...");
+        log("Shuffling");
         shuffleLongArray(points, rand);
         shuffleIntArray(todo, rand);
 
-        System.out.println("Processing...");
+        log("Processing");
 
         int todoPos = 0;
         int todoLen = todo.length;
@@ -132,13 +138,13 @@ public class ImgColor {
             remaining--;
         }
 
-        System.out.println("Writing output...");
+        log("Writing output");
         try {
             ImageIO.write(img, "PNG", new File(args[1]));
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.println("Done!");
+        log("Done!");
     }
 
 }
