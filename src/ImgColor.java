@@ -9,6 +9,12 @@ import javax.imageio.ImageIO;
 
 public class ImgColor {
 
+    private static final long startTime = System.nanoTime();
+
+    private static void log(Object log) {
+        System.out.printf("%10.6f %s%n", (System.nanoTime() - startTime) / 1e9, log);
+    }
+
     private static class Point {
         public int x, y;
         public color c;
@@ -33,23 +39,27 @@ public class ImgColor {
     public static LinkedList<Point> listFromImg(String path) {
         LinkedList<Point> ret = new LinkedList<>();
         BufferedImage bi = null;
+        log("Loading image file");
         try {
             bi = ImageIO.read(new File(path));
         } catch (IOException e) {
             e.printStackTrace();
         }
+        log("Image into list");
         for (int x = 0; x < 4096; x++) {
             for (int y = 0; y < 4096; y++) {
                 Color c = new Color(bi.getRGB(x, y));
                 ret.add(new Point(x, y, new color(c.getRed(), c.getGreen(), c.getBlue())));
             }
         }
+        log("Shuffling image data");
         Collections.shuffle(ret);
         return ret;
     }
 
     public static LinkedList<color> allColors() {
         LinkedList<color> colors = new LinkedList<>();
+        log("Building all-colors list");
         for (int r = 0; r < 256; r++) {
             for (int g = 0; g < 256; g++) {
                 for (int b = 0; b < 256; b++) {
@@ -57,6 +67,7 @@ public class ImgColor {
                 }
             }
         }
+        log("Shuffling colors");
         Collections.shuffle(colors);
         return colors;
     }
@@ -70,6 +81,7 @@ public class ImgColor {
         LinkedList<Point> orig = listFromImg(args[0]);
         LinkedList<color> toDo = allColors();
 
+        log("Processing");
         Point p = null;
         while (orig.size() > 0 && (p = orig.pop()) != null) {
             color chosen = toDo.pop();
@@ -84,11 +96,13 @@ public class ImgColor {
             }
             img.setRGB(p.x, p.y, new Color(chosen.r, chosen.g, chosen.b).getRGB());
         }
+        log("Writing output");
         try {
             ImageIO.write(img, "PNG", new File(args[1]));
         } catch (IOException e) {
             e.printStackTrace();
         }
+        log("Done!");
     }
 
 }
