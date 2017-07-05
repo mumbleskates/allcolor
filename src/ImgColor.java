@@ -107,10 +107,21 @@ public class ImgColor {
         int remaining = todo.length;
         for (long p : points) {
             int originalColor = getColorFromImage(p, img);
-            int bestTodoColor = 0;
-            int bestScore = Integer.MAX_VALUE;
 
-            for (int tries = 0; tries < Math.min(COMPARISONS, remaining); tries++) {
+            if (todoPos >= todoLen) {
+                // we have reached the end of our todo; swap todo and alternate
+                int[] swap = todo;
+                todo = alternate;
+                alternate = swap;
+                // restart counters, set length of todo to the count written to alternate
+                todoPos = 0;
+                todoLen = alternatePos;
+                alternatePos = 0;
+            }
+            int bestTodoColor = todo[todoPos++];
+            int bestScore = getColorDistance(bestTodoColor, originalColor);
+
+            for (int tries = 1; tries < Math.min(COMPARISONS, remaining); tries++) {
                 // get next todo color
                 if (todoPos >= todoLen) {
                     // we have reached the end of our todo; swap todo and alternate
