@@ -86,15 +86,36 @@ public class ImgColor {
     }
 
     public static void main(String[] args) throws IOException {
-        final int COMPARISONS = 100;
-
         Random rand = new Random();
         log("Loading");
         BufferedImage img = loadAcceptableImage(args[0]);
+
+        log("Counting original image");
+        int[] alternate = new int[1<<24];
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                alternate[img.getRGB(x, y) & 0xffffff] = 1;
+            }
+        }
+        int distinct = 0;
+        for (int present : alternate) distinct += present;
+        double originalDistinctRatio = (double)distinct / (img.getWidth() * img.getHeight());
+        log("Total " + distinct + " colors in original image " +
+                "(" + originalDistinctRatio + " fill ratio)");
+
+        final int comparisons;
+        if (args.length < 3 || args[2].toLowerCase().equals("auto")) {
+            comparisons = Math.min(10000, Math.max(2, (int)(1 / originalDistinctRatio)));
+            log("Choosing each pixel from " + comparisons + " (auto) colors");
+        } else {
+            comparisons = Math.min(1<<24, Math.max(1, Integer.parseInt(args[2])));
+            log("Choosing each pixel from " + comparisons + " colors");
+        }
+
         log("Building points and colors");
         long[] points = getImagePoints(img);
         int[] colors = allColors();
-        int[] alternate = new int[colors.length];
+        alternate = new int[colors.length];
         log("Shuffling");
         shuffleLongArray(points, rand);
         shuffleIntArray(colors, rand);
@@ -123,7 +144,7 @@ public class ImgColor {
             colorsRemaining--;
             int bestScore = getColorDistance(bestColor, originalColor);
 
-            final int addlComparisons = Math.min(COMPARISONS - 1, colorsRemaining);
+            final int addlComparisons = Math.min(comparisons - 1, colorsRemaining);
             for (int tries = 0; tries < addlComparisons; tries++) {
                 // get next todo color
                 if (colorsPos >= colorsLen) {
@@ -158,7 +179,7 @@ public class ImgColor {
                 colors[img.getRGB(x, y) & 0xffffff] = 1;
             }
         }
-        int distinct = 0;
+        distinct = 0;
         for (int present : colors) distinct += present;
         log(distinct == img.getWidth() * img.getHeight()
                 ? "Verified! All colors distinct"
