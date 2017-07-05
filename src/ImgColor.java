@@ -3,11 +3,27 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.imageio.ImageIO;
 
 
 public class ImgColor {
+    private static BufferedImage img;
+    private static long[] points;
+    private static int pointsRemaining;
+    private static int[] colors;
+    private static int[] alternate;
+    private static int colorsRemaining;
+    private static int colorsPos;
+    private static int colorsLen;
+    private static int alternatePos;
+    private static ReentrantLock lock;
+    private static CyclicBarrier flipBarrier;
+    private static CountDownLatch finished;
 
     private static final long startTime = System.nanoTime();
 
@@ -85,13 +101,56 @@ public class ImgColor {
         return ret;
     }
 
+    private static int getSingleNextColor() {
+        if (colorsPos >= colorsLen) {
+            // we have reached the end of our colors; swap colors and alternate
+            int[] swap = colors;
+            colors = alternate;
+            alternate = swap;
+            // restart counters, set length of colors to the count written to alternate
+            colorsPos = 0;
+            colorsLen = alternatePos;
+            alternatePos = 0;
+        }
+        return colors[colorsPos++];
+    }
+
+    private static void processSinglePoint(int comparisons) {
+        // all threads are now waiting on the barrier, we can work safely
+        final long originalPoint = points[--pointsRemaining];
+        final int originalColor = getColorFromImage(originalPoint, img);
+
+        int bestColor = getSingleNextColor();
+        colorsRemaining--;
+        int bestScore = getColorDistance(bestColor, originalColor);
+
+        final int addlComparisons = Math.min(comparisons - 1, pointsRemaining);
+        for (int tries = 0; tries < addlComparisons; tries++) {
+            // get next todo color
+            int tryColor = getSingleNextColor();
+            // dump the less terrible of the two colors into alternate
+            int tryScore = getColorDistance(tryColor, originalColor);
+            if (tryScore < bestScore) {
+                alternate[alternatePos++] = bestColor;
+                bestColor = tryColor;
+                bestScore = tryScore;
+            } else {
+                alternate[alternatePos++] = tryColor;
+            }
+        }
+
+        setColorOnImage(originalPoint, bestColor, img);
+    }
+
     public static void main(String[] args) throws IOException {
+        final int POOL_SIZE = Runtime.getRuntime().availableProcessors();
+
         Random rand = new Random();
         log("Loading");
-        BufferedImage img = loadAcceptableImage(args[0]);
+        img = loadAcceptableImage(args[0]);
 
         log("Counting original image");
-        int[] alternate = new int[1<<24];
+        alternate = new int[1<<24];
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
                 alternate[img.getRGB(x, y) & 0xffffff] = 1;
@@ -113,63 +172,96 @@ public class ImgColor {
         }
 
         log("Building points and colors");
-        long[] points = getImagePoints(img);
-        int[] colors = allColors();
-        alternate = new int[colors.length];
+        points = getImagePoints(img);
+        pointsRemaining = points.length;
+        colors = allColors();
+        colorsRemaining = colors.length;
         log("Shuffling");
         shuffleLongArray(points, rand);
         shuffleIntArray(colors, rand);
 
         log("Processing");
 
-        int colorsPos = 0;
-        int colorsLen = colors.length;
-        int alternatePos = 0;
+        final Runnable worker = () -> {
+            while (true) {
+                boolean waitForFlip;
+                int threadColorsPos = -1;
+                int threadAlternatePos = -1;
+                long originalPoint = -1;
 
-        int colorsRemaining = colors.length;
-        for (long p : points) {
-            int originalColor = getColorFromImage(p, img);
+                lock.lock();
+                try {
+                    if (pointsRemaining == 0) {
+                        // no more pixels to write
+                        finished.countDown();
+                        return;
+                    }
+                    if (colorsPos + comparisons > colorsLen) {
+                        waitForFlip = true;
+                    } else {
+                        waitForFlip = false;
+                        threadColorsPos = colorsPos;
+                        colorsPos += comparisons;
+                        threadAlternatePos = alternatePos;
+                        alternatePos += comparisons - 1;
+                        colorsRemaining--;
+                        originalPoint = points[--pointsRemaining];
+                    }
+                } finally { lock.unlock(); }
 
-            if (colorsPos >= colorsLen) {
-                // we have reached the end of our todo; swap todo and alternate
-                int[] swap = colors;
-                colors = alternate;
-                alternate = swap;
-                // restart counters, set length of todo to the count written to alternate
-                colorsPos = 0;
-                colorsLen = alternatePos;
-                alternatePos = 0;
-            }
-            int bestColor = colors[colorsPos++];
-            colorsRemaining--;
-            int bestScore = getColorDistance(bestColor, originalColor);
-
-            final int addlComparisons = Math.min(comparisons - 1, colorsRemaining);
-            for (int tries = 0; tries < addlComparisons; tries++) {
-                // get next todo color
-                if (colorsPos >= colorsLen) {
-                    // we have reached the end of our todo; swap todo and alternate
-                    int[] swap = colors;
-                    colors = alternate;
-                    alternate = swap;
-                    // restart counters, set length of todo to the count written to alternate
-                    colorsPos = 0;
-                    colorsLen = alternatePos;
-                    alternatePos = 0;
-                }
-                int tryColor = colors[colorsPos++];
-                // dump the less terrible of the two colors into alternate
-                int tryScore = getColorDistance(tryColor, originalColor);
-                if (tryScore < bestScore) {
-                    alternate[alternatePos++] = bestColor;
-                    bestColor = tryColor;
-                    bestScore = tryScore;
+                if (waitForFlip) {
+                    try {
+                        flipBarrier.await();
+                    } catch (BrokenBarrierException | InterruptedException ex) {
+                        return;
+                    }
                 } else {
-                    alternate[alternatePos++] = tryColor;
+                    // get original and first todo color
+                    int originalColor = getColorFromImage(originalPoint, img);
+                    int bestColor = colors[threadColorsPos++];
+                    int bestScore = getColorDistance(bestColor, originalColor);
+
+                    // compare against COMPARISONS - 1 other colors
+                    for (int i = 1; i < comparisons; i++) {
+                        int tryColor = colors[threadColorsPos++];
+                        int tryScore = getColorDistance(tryColor, originalColor);
+                        if (tryScore < bestScore) {
+                            alternate[threadAlternatePos++] = bestColor;
+                            bestColor = tryColor;
+                            bestScore = tryScore;
+                        } else {
+                            alternate[threadAlternatePos++] = tryColor;
+                        }
+                    }
+
+                    setColorOnImage(originalPoint, bestColor, img);
                 }
             }
+        };
 
-            setColorOnImage(p, bestColor, img);
+        final Runnable flipArrays = () -> {
+            do {
+                processSinglePoint(comparisons);
+            } while (pointsRemaining > 0 && colorsRemaining < comparisons);
+        };
+
+        colorsPos = 0;
+        colorsLen = colors.length;
+        alternatePos = 0;
+        pointsRemaining = colors.length;
+        lock = new ReentrantLock();
+        flipBarrier = new CyclicBarrier(POOL_SIZE, flipArrays);
+        finished = new CountDownLatch(POOL_SIZE);
+        Thread[] pool = new Thread[POOL_SIZE];
+        for (int i = 0; i < POOL_SIZE; i++) {
+            pool[i] = new Thread(worker);
+            pool[i].start();
+        }
+        try {
+            finished.await();
+        } catch (InterruptedException ex) {
+            log("Interrupted");
+            return;
         }
 
         log("Verifying");
