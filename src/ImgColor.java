@@ -93,72 +93,73 @@ public class ImgColor {
         BufferedImage img = loadAcceptableImage(args[0]);
         log("Building points and colors");
         long[] points = getImagePoints(img);
-        int[] todo = allColors();
-        int[] alternate = new int[todo.length];
+        int[] colors = allColors();
+        int[] alternate = new int[colors.length];
         log("Shuffling");
         shuffleLongArray(points, rand);
-        shuffleIntArray(todo, rand);
+        shuffleIntArray(colors, rand);
 
         log("Processing");
 
-        int todoPos = 0;
-        int todoLen = todo.length;
+        int colorsPos = 0;
+        int colorsLen = colors.length;
         int alternatePos = 0;
 
-        int remaining = todo.length;
+        int colorsRemaining = colors.length;
         for (long p : points) {
             int originalColor = getColorFromImage(p, img);
 
-            if (todoPos >= todoLen) {
+            if (colorsPos >= colorsLen) {
                 // we have reached the end of our todo; swap todo and alternate
-                int[] swap = todo;
-                todo = alternate;
+                int[] swap = colors;
+                colors = alternate;
                 alternate = swap;
                 // restart counters, set length of todo to the count written to alternate
-                todoPos = 0;
-                todoLen = alternatePos;
+                colorsPos = 0;
+                colorsLen = alternatePos;
                 alternatePos = 0;
             }
-            int bestTodoColor = todo[todoPos++];
-            int bestScore = getColorDistance(bestTodoColor, originalColor);
+            int bestColor = colors[colorsPos++];
+            colorsRemaining--;
+            int bestScore = getColorDistance(bestColor, originalColor);
 
-            for (int tries = 1; tries < Math.min(COMPARISONS, remaining); tries++) {
+            final int addlComparisons = Math.min(COMPARISONS - 1, colorsRemaining);
+            for (int tries = 0; tries < addlComparisons; tries++) {
                 // get next todo color
-                if (todoPos >= todoLen) {
+                if (colorsPos >= colorsLen) {
                     // we have reached the end of our todo; swap todo and alternate
-                    int[] swap = todo;
-                    todo = alternate;
+                    int[] swap = colors;
+                    colors = alternate;
                     alternate = swap;
                     // restart counters, set length of todo to the count written to alternate
-                    todoPos = 0;
-                    todoLen = alternatePos;
+                    colorsPos = 0;
+                    colorsLen = alternatePos;
                     alternatePos = 0;
                 }
-                int tryColor = todo[todoPos++];
+                int tryColor = colors[colorsPos++];
                 // dump the less terrible of the two colors into alternate
                 int tryScore = getColorDistance(tryColor, originalColor);
                 if (tryScore < bestScore) {
-                    alternate[alternatePos++] = bestTodoColor;
-                    bestTodoColor = tryColor;
+                    alternate[alternatePos++] = bestColor;
+                    bestColor = tryColor;
                     bestScore = tryScore;
                 } else {
                     alternate[alternatePos++] = tryColor;
                 }
             }
 
-            setColorOnImage(p, bestTodoColor, img);
-            remaining--;
+            setColorOnImage(p, bestColor, img);
         }
 
         log("Verifying");
-        Arrays.fill(todo, 0);
+        Arrays.fill(colors, 0);
         for (int y = 0; y < img.getHeight(); y++) {
             for (int x = 0; x < img.getWidth(); x++) {
-                todo[img.getRGB(x, y) & 0xffffff] = 1;
+                colors[img.getRGB(x, y) & 0xffffff] = 1;
             }
         }
         int distinct = 0;
-        for (int present : todo) distinct += present;
+        for (int present : colors) distinct += present;
         log(distinct == img.getWidth() * img.getHeight()
                 ? "Verified! All colors distinct"
                 : "ERROR! duplicate colors exist");
