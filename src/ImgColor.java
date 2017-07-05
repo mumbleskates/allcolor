@@ -1,6 +1,7 @@
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Random;
 
 import javax.imageio.ImageIO;
@@ -148,6 +149,19 @@ public class ImgColor {
             setColorOnImage(p, bestTodoColor, img);
             remaining--;
         }
+
+        log("Verifying");
+        Arrays.fill(todo, 0);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                todo[img.getRGB(x, y) & 0xffffff] = 1;
+            }
+        }
+        int distinct = 0;
+        for (int present : todo) distinct += present;
+        log(distinct == img.getWidth() * img.getHeight()
+                ? "Verified! All colors distinct"
+                : "ERROR! duplicate colors exist");
 
         log("Writing output");
         try {
