@@ -142,6 +142,23 @@ public class ImplicitKdTree<T> {
         return result;
     }
 
+    public NearestResult<T> nearest(final double[] val, final double maxSqDistance) {
+        if (val == null || val.length != k) {
+            throw new IllegalArgumentException("val must have length " + k + " to match the tree");
+        }
+        if (head == null || maxSqDistance <= 0 || Double.isNaN(maxSqDistance)) {
+            return null;
+        }
+        NearestResult<T> result = new NearestResult<>(null, null, maxSqDistance);
+        search(val, head, 0, result);
+        if (result.key == null) {
+            // no result was found
+            return null;
+        } else {
+            return result;
+        }
+    }
+
 
     private void removeNode(final KdNode<T> node) {
         KdNode<T> popped = node.popDeepest();
