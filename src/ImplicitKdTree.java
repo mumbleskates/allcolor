@@ -29,9 +29,10 @@ public class ImplicitKdTree<T> {
         return items.size();
     }
 
-    // TODO: this is debug
-    int height() {
-        return head.maxdepth;
+    /** Return the depth of the deepest leaf, in number of nodes traversed */
+    public int maxHeight() {
+        if (head == null) return 0;
+        return head.maxdepth + 1;
     }
 
     public double[] get(final T key) {
