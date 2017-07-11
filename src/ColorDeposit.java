@@ -15,8 +15,8 @@ public class ColorDeposit {
     private static ImplicitKdTree<Point> frontier;
     private static int[] colors;
     private static double[][] values;
-    private static final int w = 512;
-    private static final int h = 512;
+    private static final int w = 4096;
+    private static final int h = 4096;
 
     private static Point[] frontierOffsets = new Point[] {
             new Point(-1, 0),
@@ -204,31 +204,53 @@ public class ColorDeposit {
         canvas = new int[h][w];
         for (int[] row : canvas) Arrays.fill(row, -1);
 
+        log("processing");
         // place first pixel
         frontier = new ImplicitKdTree<>(3, envelopeLower, envelopeUpper);
         placePixel(originX, originY, 0);
 
-        long lastUpdate = System.nanoTime();
-        int updatePeriod = 1 << 9;
+        long beganWorkingTime = System.nanoTime();
+        long lastUpdateTime = beganWorkingTime;
+        int lastUpdateIndex = 1;
+        int nextUpdateIndex = 1024;
+        final double targetUpdateInterval = 0.5;
 
         // serially place all remaining colors
         for (int i = 1; i < colors.length; i++) {
             Point p = bestFrontier(values[i]);
             frontier.remove(p);
             placePixel(p.x, p.y, i);
-            if (((updatePeriod - 1) & i) == 0) {
+
+            // print progress
+            if (i == nextUpdateIndex) {
                 long timeNow = System.nanoTime();
-                System.out.printf("%d/%d - %d px/sec - frontier size %d, maxheight %d    \r",
-                        i,
-                        colors.length,
-                        (int)((double)updatePeriod / (timeNow - lastUpdate) * 1e9),
-                        frontier.size(),
-                        frontier.height()
+                double secondsElapsed = (double)(timeNow - beganWorkingTime) / 1e9;
+                double secondsSinceLastUpdate = (double)(timeNow - lastUpdateTime) / 1e9;
+                double updateRate = (i - lastUpdateIndex) / secondsSinceLastUpdate;
+                double percent = (double)i / colors.length * 100;
+                System.out.printf(
+                        "-> %.1f elapsed - %.3f%% - eta %.1f sec - %.0f px/sec - frontier size %d     \r",
+                        secondsElapsed,
+                        percent,
+                        (colors.length - i) * secondsElapsed / i,  // ETA: remaining work to do divided by rate so far
+                        updateRate,
+                        frontier.size()
                 );
-                lastUpdate = timeNow;
+                lastUpdateTime = timeNow;
+                lastUpdateIndex = i;
+                nextUpdateIndex = i + (int)(updateRate * targetUpdateInterval);
             }
         }
+
+        long finishedWorkingTime = System.nanoTime();
         System.out.println();
+        log("done computing");
+
+        double secondsElapsed = (double)(finishedWorkingTime - beganWorkingTime) / 1e9;
+        System.out.printf(
+                "--- %.2f seconds calculating, average %.1f px/sec%n",
+                secondsElapsed, colors.length / secondsElapsed
+        );
 
         log("verifying");
         int[] presents = new int[colors.length];
