@@ -1,6 +1,7 @@
 import javax.imageio.ImageIO;
 import java.awt.Point;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -18,13 +19,13 @@ public class ColorDeposit {
     private static final int w = 4096;
     private static final int h = 4096;
 
-    private static Point[] frontierOffsets = new Point[] {
+    private static Point[] frontierOffsets = {
             new Point(-1, 0),
             new Point(0, -1),
             new Point(1, 0),
             new Point(0, 1),
     };
-    private static Point[] sampleOffsets = new Point[] {
+    private static Point[] sampleOffsets = {
             new Point(-1,  0),
             new Point(-1, -1),
             new Point(0, -1),
@@ -71,7 +72,7 @@ public class ColorDeposit {
         double[][] result = new double[colors.length][];
         int i = 0;
         for (int color : colors) {
-            result[i++] = new double[]{
+            result[i++] = new double[] {
                     ((color & 0x00ff0000) >> 16) / 256.0,  // r
                     ((color & 0x0000ff00) >> 8) / 256.0,  // g
                     (color & 0x000000ff) / 256.0  // b
@@ -196,7 +197,7 @@ public class ColorDeposit {
                 envelopeUpper[ch] = Math.max(envelopeUpper[ch], value[ch]);
             }
         }
-        log("color envelope:");
+        log("color value envelope:");
         log("lower=" + Arrays.toString(envelopeLower));
         log("upper=" + Arrays.toString(envelopeUpper));
 
@@ -267,14 +268,18 @@ public class ColorDeposit {
         
         log("filling image");
         // allocate image
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_4BYTE_ABGR);
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        int[] output = ((DataBufferInt)img.getRaster().getDataBuffer()).getData();
+        int i = 0;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                img.setRGB(x, y, colors[canvas[y][x]]);
+                output[i++] = colors[canvas[y][x]];
             }
         }
+
         log("writing output file");
         ImageIO.write(img, "PNG", new File(args[0]));
+
         log("Done!");
     }
 
