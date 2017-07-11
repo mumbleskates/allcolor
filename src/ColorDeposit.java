@@ -15,8 +15,8 @@ public class ColorDeposit {
     private static ImplicitKdTree<Point> frontier;
     private static int[] colors;
     private static double[][] values;
-    private static final int w = 128;
-    private static final int h = 128;
+    private static final int w = 512;
+    private static final int h = 512;
 
     private static Point[] frontierOffsets = new Point[] {
             new Point(-1, 0),
@@ -146,10 +146,11 @@ public class ColorDeposit {
                     if (sy < 0 || sy >= h) continue;
                     // if a color was already placed here, add it to the sample average
                     if (canvas[sy][sx] >= 0) {
-                        totalWeight += sampleWeights[i];
+                        double sampleWeight = sampleWeights[i];
+                        totalWeight += sampleWeight;
                         double[] sampleValue = values[canvas[sy][sx]];
                         for (int ch = 0; ch < 3; ch++) {
-                            newVal[ch] += sampleValue[ch];
+                            newVal[ch] += sampleValue[ch] * sampleWeight;
                         }
                     }
                 }
@@ -158,7 +159,6 @@ public class ColorDeposit {
                     newVal[ch] /= totalWeight;
                 }
                 // update this frontier point
-//                log("updating frontier (" + fx + "," + fy + ") to " + Arrays.toString(newVal));
                 frontier.put(new Point(fx, fy), newVal);
             }
         }
@@ -196,6 +196,9 @@ public class ColorDeposit {
                 envelopeUpper[ch] = Math.max(envelopeUpper[ch], value[ch]);
             }
         }
+        log("color envelope:");
+        log("lower=" + Arrays.toString(envelopeLower));
+        log("upper=" + Arrays.toString(envelopeUpper));
 
         log("building canvas");
         canvas = new int[h][w];
