@@ -29,6 +29,11 @@ public class ImplicitKdTree<T> {
         return items.size();
     }
 
+    // TODO: this is debug
+    int height() {
+        return head.maxdepth;
+    }
+
     public double[] get(final T key) {
         return items.get(key).val;
     }
@@ -45,7 +50,7 @@ public class ImplicitKdTree<T> {
 
         // remove previous node for this key if it exists
         KdNode<T> current = items.get(key);
-        if (items == null) {
+        if (current == null) {
             oldVal = null;
         } else {
             oldVal = current.val;
@@ -194,6 +199,7 @@ public class ImplicitKdTree<T> {
         if (nodeSqDistance < result.sqDistance) {
             result.key = node.key;
             result.val = node.val;
+            result.sqDistance = nodeSqDistance;
         }
         // traverse downwards
         int dim = depth % k;
