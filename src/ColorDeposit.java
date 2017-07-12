@@ -12,8 +12,8 @@ import java.util.function.Function;
 public class ColorDeposit {
     // map of our image: -1 for unexplored, -2 for frontier,
     // non-negative for a placed color at that index in colors
-    private static int[][] canvas;
-    private static ImplicitKdTree<Point> frontier;
+    private static int[] canvas;
+    private static ImplicitKdTree<Integer> frontier;
     private static int[] colors;
     private static double[][] values;
     private static final int w = 4096;
@@ -125,16 +125,17 @@ public class ColorDeposit {
     };
 
 
-    private static void placePixel(int x, int y, int colorIndex) {
-        assert canvas[y][x] == -1;
-        canvas[y][x] = colorIndex;
+    private static void placePixel(int index, int colorIndex) {
+        canvas[index] = colorIndex;
+        int x = index % w;
+        int y = index / w;
         // find empty neighboring points as frontiers
         for (Point frontierOffset : frontierOffsets) {
             int fx = x + frontierOffset.x;
             if (fx < 0 || fx >= w) continue;
             int fy = y + frontierOffset.y;
             if (fy < 0 || fy >= h) continue;
-            if (canvas[fy][fx] < 0) {
+            if (canvas[fy * w + fx] < 0) {
                 // canvas[fy][fx] = -2;
                 // sum surrounding points for the new value of this frontier
                 double[] newVal = new double[3];
@@ -146,10 +147,11 @@ public class ColorDeposit {
                     int sy = fy + sampleOffset.y;
                     if (sy < 0 || sy >= h) continue;
                     // if a color was already placed here, add it to the sample average
-                    if (canvas[sy][sx] >= 0) {
+                    int sampleSpot = canvas[sy * w + sx];
+                    if (sampleSpot >= 0) {
                         double sampleWeight = sampleWeights[i];
                         totalWeight += sampleWeight;
-                        double[] sampleValue = values[canvas[sy][sx]];
+                        double[] sampleValue = values[sampleSpot];
                         for (int ch = 0; ch < 3; ch++) {
                             newVal[ch] += sampleValue[ch] * sampleWeight;
                         }
@@ -160,12 +162,12 @@ public class ColorDeposit {
                     newVal[ch] /= totalWeight;
                 }
                 // update this frontier point
-                frontier.put(new Point(fx, fy), newVal);
+                frontier.put(fy * w + fx, newVal);
             }
         }
     }
 
-    private static Point bestFrontier(double[] val) {
+    private static int bestFrontier(double[] val) {
         return frontier.nearest(val).key;
     }
 
@@ -202,13 +204,13 @@ public class ColorDeposit {
         log("upper=" + Arrays.toString(envelopeUpper));
 
         log("building canvas");
-        canvas = new int[h][w];
-        for (int[] row : canvas) Arrays.fill(row, -1);
+        canvas = new int[w * h];
+        Arrays.fill(canvas, -1);
 
         log("processing");
         // place first pixel
         frontier = new ImplicitKdTree<>(3, envelopeLower, envelopeUpper);
-        placePixel(originX, originY, 0);
+        placePixel(originY * w + originX, 0);
 
         long beganWorkingTime = System.nanoTime();
         long lastUpdateTime = beganWorkingTime;
@@ -218,9 +220,9 @@ public class ColorDeposit {
 
         // serially place all remaining colors
         for (int i = 1; i < colors.length; i++) {
-            Point p = bestFrontier(values[i]);
-            frontier.remove(p);
-            placePixel(p.x, p.y, i);
+            Integer best = bestFrontier(values[i]);
+            frontier.remove(best);
+            placePixel(best, i);
 
             // print progress
             if (i == nextUpdateIndex) {
@@ -255,10 +257,8 @@ public class ColorDeposit {
 
         log("verifying");
         int[] presents = new int[colors.length];
-        for (int[] row : canvas) {
-            for (int color : row) {
-                presents[color] = 1;
-            }
+        for (int color : canvas) {
+            presents[color] = 1;
         }
         int distinct = 0;
         for (int present : presents) distinct += present;
@@ -271,10 +271,8 @@ public class ColorDeposit {
         BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         int[] output = ((DataBufferInt)img.getRaster().getDataBuffer()).getData();
         int i = 0;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                output[i++] = colors[canvas[y][x]];
-            }
+        for (int color : canvas) {
+            output[i++] = colors[color];
         }
 
         log("writing output file");
