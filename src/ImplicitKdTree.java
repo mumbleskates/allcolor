@@ -113,15 +113,6 @@ public class ImplicitKdTree<T> {
                     }
                 }
             }
-
-            // update parent nodes' maxdepth
-            while (current != null) {
-                if (current.maxdepth >= depth) {
-                    break;
-                }
-                current.maxdepth = depth;
-                current = current.parent;
-            }
         }
         return oldVal;
     }
@@ -237,12 +228,22 @@ public class ImplicitKdTree<T> {
         KdNode<T> left;
         KdNode<T> right;
 
-        KdNode(T key, double[] val, KdNode<T> parent, int depth, double mid) {
+        KdNode(final T key, final double[] val, final KdNode<T> parent, final int depth, final double mid) {
             this.key = key;
             this.val = val;
             this.parent = parent;
             this.maxdepth = depth;
             this.mid = mid;
+
+            KdNode<T> current = parent;
+            // update parent nodes' maxdepth
+            while (current != null) {
+                if (current.maxdepth >= depth) {
+                    break;
+                }
+                current.maxdepth = depth;
+                current = current.parent;
+            }
         }
 
         KdNode<T> popDeepest() {
