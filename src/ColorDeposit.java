@@ -99,7 +99,7 @@ public class ColorDeposit {
         for (double[] v : result) {
             double r = v[0], g = v[1], b = v[2];
             v[0] = r * 0.412424 + g * 0.212656 + b * 0.0193324;
-            v[1] = r * 0.357579 + g * 0.745158 + b * 0.119193;
+            v[1] = r * 0.357579 + g * 0.715158 + b * 0.119193;
             v[2] = r * 0.180464 + g * 0.0721856 + b * 0.950444;
         }
         return result;
