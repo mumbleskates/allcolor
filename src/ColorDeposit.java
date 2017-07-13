@@ -132,9 +132,13 @@ public class ColorDeposit {
         // find empty neighboring points as frontiers
         for (Point frontierOffset : frontierOffsets) {
             int fx = x + frontierOffset.x;
-            if (fx < 0 || fx >= w) continue;
             int fy = y + frontierOffset.y;
-            if (fy < 0 || fy >= h) continue;
+//            // hard borders
+//            if (fx < 0 || fx >= w) continue;
+//            if (fy < 0 || fy >= h) continue;
+            // wraparound borders
+            if (fx < 0 || fx >= w) fx = (fx + w) % w;
+            if (fy < 0 || fy >= h) fy = (fy + h) % h;
             if (canvas[fy * w + fx] < 0) {
                 // canvas[fy][fx] = -2;
                 // sum surrounding points for the new value of this frontier
@@ -143,9 +147,9 @@ public class ColorDeposit {
                 for (int i = 0; i < sampleOffsets.length; i++) {
                     Point sampleOffset = sampleOffsets[i];
                     int sx = fx + sampleOffset.x;
-                    if (sx < 0 || sx >= w) continue;
+                    if (sx < 0 || sx >= w) sx = (sx + w) % w;
                     int sy = fy + sampleOffset.y;
-                    if (sy < 0 || sy >= h) continue;
+                    if (sy < 0 || sy >= h) sy = (sy + h) % h;
                     // if a color was already placed here, add it to the sample average
                     int sampleSpot = canvas[sy * w + sx];
                     if (sampleSpot >= 0) {
@@ -166,11 +170,6 @@ public class ColorDeposit {
             }
         }
     }
-
-    private static int bestFrontier(double[] val) {
-        return frontier.nearest(val).key;
-    }
-
 
     public static void main(String[] args) throws IOException {
         final Random rand = new Random();
@@ -217,10 +216,13 @@ public class ColorDeposit {
         int lastUpdateIndex = 1;
         int nextUpdateIndex = 1024;
         final double targetUpdateInterval = 0.5;
+        long nodesSearched = 0;
 
         // serially place all remaining colors
         for (int i = 1; i < colors.length; i++) {
-            Integer best = bestFrontier(values[i]);
+            ImplicitKdTree.NearestResult<Integer> result = frontier.nearest(values[i]);
+            Integer best = result.key;
+            nodesSearched += result.searched;
             frontier.remove(best);
             placePixel(best, i);
 
@@ -230,18 +232,23 @@ public class ColorDeposit {
                 double secondsElapsed = (double)(timeNow - beganWorkingTime) / 1e9;
                 double secondsSinceLastUpdate = (double)(timeNow - lastUpdateTime) / 1e9;
                 double updateRate = (i - lastUpdateIndex) / secondsSinceLastUpdate;
+                double harmonicAvgUpdateRate = 2 / (1 / updateRate + secondsElapsed / i);
                 double percent = (double)i / colors.length * 100;
+                nodesSearched = 0;
                 System.out.printf(
-                        "-> %.1f elapsed - %.3f%% - eta %.1f sec - %.0f px/sec - frontier size %d     \r",
+                        "-> %.1f elapsed - %.3f%% - eta %.1f sec - %.0f px/sec - frontier size %d, height %d - %d node/px, %.1f node/sec     \r",
                         secondsElapsed,
                         percent,
-                        (colors.length - i) * secondsElapsed / i,  // ETA: remaining work to do divided by rate so far
+                        (colors.length - i) / harmonicAvgUpdateRate,  // ETA: remaining work to do divided by rate so far
                         updateRate,
-                        frontier.size()
+                        frontier.size(),
+                        frontier.maxHeight(),
+                        nodesSearched / (i - lastUpdateIndex),
+                        nodesSearched / secondsSinceLastUpdate
                 );
                 lastUpdateTime = timeNow;
                 lastUpdateIndex = i;
-                nextUpdateIndex = i + (int)(updateRate * targetUpdateInterval);
+                nextUpdateIndex = i + (int)(harmonicAvgUpdateRate * targetUpdateInterval);
             }
         }
 
