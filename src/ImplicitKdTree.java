@@ -182,6 +182,7 @@ public class ImplicitKdTree<T> {
 
     private void search(final double[] val, final KdNode<T> node, int depth, final NearestResult<T> result) {
         // calculate sqDistance to this node
+        result.searched++;
         double nodeSqDistance = 0;
         for (int i = 0; i < k; i++) {
             double diff = (node.val[i] - val[i]);
@@ -300,11 +301,13 @@ public class ImplicitKdTree<T> {
         public T key;
         public double[] val;
         public double sqDistance;
+        public int searched;
 
         public NearestResult(T key, double[] val, double sqDistance) {
             this.key = key;
             this.val = val;
             this.sqDistance = sqDistance;
+            this.searched = 0;
         }
     }
 }
