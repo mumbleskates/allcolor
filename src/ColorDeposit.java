@@ -6,7 +6,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Random;
-import java.util.function.Function;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.function.IntFunction;
 
 
 public class ColorDeposit {
@@ -68,22 +70,25 @@ public class ColorDeposit {
         return result;
     }
 
-    private static final Function<int[], double[][]> getSrgbValues = (colors) -> {
-        double[][] result = new double[colors.length][];
-        int i = 0;
-        for (int color : colors) {
-            result[i++] = new double[] {
+    private interface ColorConverter {
+        void convert(int[] colors, double[][] result, int from, int to);
+    }
+
+    private static final ColorConverter getSrgbValues = (colors, result, from, to) -> {
+        for (int ci = from; ci < to; ci++) {
+            int color = colors[ci];
+            result[ci] = new double[] {
                     ((color & 0x00ff0000) >> 16) / 256.0,  // r
                     ((color & 0x0000ff00) >> 8) / 256.0,  // g
                     (color & 0x000000ff) / 256.0  // b
             };
         }
-        return result;
     };
 
-    private static final Function<int[], double[][]> getLinearRgbValues = (colors) -> {
-        double[][] result = getSrgbValues.apply(colors);
-        for (double[] v : result) {
+    private static final ColorConverter getLinearRgbValues = (colors, result, from, to) -> {
+        getSrgbValues.convert(colors, result, from, to);
+        for (int ci = from; ci < to; ci++) {
+            double[] v = result[ci];
             int i = 0;
             for (double ch : v) {
                 v[i++] = ch <= 0.04045
@@ -91,23 +96,23 @@ public class ColorDeposit {
                         : Math.pow((ch + 0.055) / 1.055, 2.4);
             }
         }
-        return result;
     };
 
-    private static final Function<int[], double[][]> getXyzValues = (colors) -> {
-        double[][] result = getLinearRgbValues.apply(colors);
-        for (double[] v : result) {
+    private static final ColorConverter getXyzValues = (colors, result, from, to) -> {
+        getLinearRgbValues.convert(colors, result, from, to);
+        for (int ci = from; ci < to; ci++) {
+            double[] v = result[ci];
             double r = v[0], g = v[1], b = v[2];
             v[0] = r * 0.412424 + g * 0.212656 + b * 0.0193324;
             v[1] = r * 0.357579 + g * 0.715158 + b * 0.119193;
             v[2] = r * 0.180464 + g * 0.0721856 + b * 0.950444;
         }
-        return result;
     };
 
-    private static final Function<int[], double[][]> getLabValues = (colors) -> {
-        double[][] result = getXyzValues.apply(colors);
-        for (double[] v : result) {
+    private static final ColorConverter getLabValues = (colors, result, from, to) -> {
+        getXyzValues.convert(colors, result, from, to);
+        for (int ci = from; ci < to; ci++) {
+            double[] v = result[ci];
             // scale channel values first
             int i = 0;
             for (double ch : v) {
@@ -121,7 +126,6 @@ public class ColorDeposit {
             v[1] = (x - y) * 500.0;
             v[2] = (y - z) * 200.0;
         }
-        return result;
     };
 
 
@@ -171,21 +175,81 @@ public class ColorDeposit {
         }
     }
 
+    private static ImplicitKdTree.NearestResult<Integer>[] findings;
+    private static ImplicitKdTree.NearestResult<Integer>[] inputting;
+
+    private static Runnable searchWorker(
+            final int workerId,
+            final int POOL_SIZE,
+            final int BATCH_SIZE,
+            final CyclicBarrier sync
+    ) { return () -> {
+        // convert colors
+        getLabValues.convert(
+                colors, values,
+                workerId * values.length / POOL_SIZE,
+                (workerId + 1) * values.length / POOL_SIZE
+        );
+        // first sync on color value calculation
+        try {
+            sync.await();
+        } catch (BrokenBarrierException | InterruptedException ex) {
+            return;
+        }
+
+        final int destOffset = workerId * BATCH_SIZE;
+
+        // for each batch
+        for (int sourceOffset = workerId * BATCH_SIZE;
+             sourceOffset < values.length - BATCH_SIZE;
+             sourceOffset += (POOL_SIZE - 1) * BATCH_SIZE) {
+            ImplicitKdTree.NearestResult<Integer>[] dest = findings;
+            // process our pixels for the batch
+            for (int i = 0; i < BATCH_SIZE; i++) {
+                dest[i + destOffset] = frontier.nearest(values[sourceOffset + i]);
+            }
+            // sync
+            try {
+                sync.await();
+            } catch (BrokenBarrierException | InterruptedException ex) {
+                return;
+            }
+        }
+    }; }
+
     public static void main(String[] args) throws IOException {
+        final int POOL_SIZE = Runtime.getRuntime().availableProcessors();
+        final int BATCH_SIZE = 128;
         final Random rand = new Random();
 
         // parameters here
         final int originX = w / 2;
         final int originY = h / 2;
 
+        //noinspection unchecked
+        findings = new ImplicitKdTree.NearestResult[(POOL_SIZE - 1) * BATCH_SIZE];
+        //noinspection unchecked
+        inputting = new ImplicitKdTree.NearestResult[(POOL_SIZE - 1) * BATCH_SIZE];
+        final ImplicitKdTree<Integer> shortFrontier;
+        final CyclicBarrier sync = new CyclicBarrier(POOL_SIZE, () -> {
+            if (shortFrontier == null) return;
+            for (ImplicitKdTree.NearestResult<Integer> placed : inputting) {
+                frontier.remove(placed.key);
+            }
+            shortFrontier.forEach((Integer p, double[] val) -> frontier.put(p, val));
+        });
+
+
         log("creating colors");
         colors = allColors();
         log("shuffling");
         shuffleIntArray(colors, rand);
+        // truncate
+        colors = Arrays.copyOf(colors, w * h);
 
         log("computing color values");
-        colors = Arrays.copyOf(colors, w * h);
-        values = getLabValues.apply(colors);
+        values = new double[w * h][];
+        // getLabValues.convert(colors, values, 0, w * h); // todo: put this in first worker cycle
 
         log("calculating color envelope");
         double[] envelopeLower = new double[3];
@@ -207,8 +271,10 @@ public class ColorDeposit {
         Arrays.fill(canvas, -1);
 
         log("processing");
+
         // place first pixel
         frontier = new ImplicitKdTree<>(3, envelopeLower, envelopeUpper);
+        shortFrontier = new ImplicitKdTree<>(3, envelopeLower, envelopeUpper);
         placePixel(originY * w + originX, 0);
 
         long beganWorkingTime = System.nanoTime();
