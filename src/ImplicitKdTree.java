@@ -1,7 +1,18 @@
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.function.BiConsumer;
+
+import static java.util.AbstractMap.SimpleEntry;
+import static java.util.Map.Entry;
+import static java.util.Spliterator.DISTINCT;
+import static java.util.Spliterator.NONNULL;
+import static java.util.Spliterator.SIZED;
 
 
-public class ImplicitKdTree<T> {
+public class ImplicitKdTree<T> implements Iterable<Entry<T, double[]>> {
     private final int k;
     private final double[] lower;
     private final double[] upper;
@@ -205,7 +216,7 @@ public class ImplicitKdTree<T> {
                 search(val, node.left, depth, result);
             }
             // traverse the other side if needed
-            if (node.right != null && mid_diff * mid_diff < result.sqDistance) {
+            if (node.right != null && mid_diff * mid_diff <= result.sqDistance) {
                 search(val, node.right, depth, result);
             }
         } else {  // val is right of splitting plane
@@ -217,6 +228,42 @@ public class ImplicitKdTree<T> {
                 search(val, node.left, depth, result);
             }
         }
+    }
+
+    public void clear() {
+        items.clear();
+        head = null;
+    }
+
+    @Override
+    public Iterator<Entry<T, double[]>> iterator() {
+        return new Iterator<Entry<T, double[]>>() {
+            Iterator<Entry<T, KdNode<T>>> wrapped = items.entrySet().iterator();
+
+            @Override
+            public boolean hasNext() {
+                return wrapped.hasNext();
+            }
+
+            @Override
+            public Entry<T, double[]> next() {
+                Entry<T, KdNode<T>> x = wrapped.next();
+                return new SimpleEntry<>(x.getKey(), x.getValue().val);
+            }
+        };
+    }
+
+    @Override
+    public Spliterator<Entry<T, double[]>> spliterator() {
+        return Spliterators.spliterator(iterator(), items.size(), DISTINCT + NONNULL + SIZED);
+    }
+
+    public void forEach(BiConsumer<? super T, double[]> action) {
+        items.forEach((key, node) -> action.accept(key, node.val));
+    }
+
+    public Set<T> keySet() {
+        return items.keySet();
     }
 
 
