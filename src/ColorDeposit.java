@@ -133,12 +133,12 @@ public class ColorDeposit {
         for (Point frontierOffset : frontierOffsets) {
             int fx = x + frontierOffset.x;
             int fy = y + frontierOffset.y;
-//            // hard borders
-//            if (fx < 0 || fx >= w) continue;
-//            if (fy < 0 || fy >= h) continue;
-            // wraparound borders
-            if (fx < 0 || fx >= w) fx = (fx + w) % w;
-            if (fy < 0 || fy >= h) fy = (fy + h) % h;
+            // hard borders
+            if (fx < 0 || fx >= w) continue;
+            if (fy < 0 || fy >= h) continue;
+//            // wraparound borders
+//            if (fx < 0 || fx >= w) fx = (fx + w) % w;
+//            if (fy < 0 || fy >= h) fy = (fy + h) % h;
             if (canvas[fy * w + fx] < 0) {
                 // canvas[fy][fx] = -2;
                 // sum surrounding points for the new value of this frontier
@@ -147,9 +147,9 @@ public class ColorDeposit {
                 for (int i = 0; i < sampleOffsets.length; i++) {
                     Point sampleOffset = sampleOffsets[i];
                     int sx = fx + sampleOffset.x;
-                    if (sx < 0 || sx >= w) sx = (sx + w) % w;
+                    if (sx < 0 || sx >= w) continue;
                     int sy = fy + sampleOffset.y;
-                    if (sy < 0 || sy >= h) sy = (sy + h) % h;
+                    if (sy < 0 || sy >= h) continue;
                     // if a color was already placed here, add it to the sample average
                     int sampleSpot = canvas[sy * w + sx];
                     if (sampleSpot >= 0) {
@@ -180,8 +180,8 @@ public class ColorDeposit {
 
         log("creating colors");
         colors = allColors();
-        log("shuffling");
-        shuffleIntArray(colors, rand);
+//        log("shuffling");
+//        shuffleIntArray(colors, rand);
 
         log("computing color values");
         colors = Arrays.copyOf(colors, w * h);
