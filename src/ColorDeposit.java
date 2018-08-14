@@ -181,8 +181,8 @@ public class ColorDeposit {
 
         log("creating colors");
         colors = allColors();
-        log("shuffling");
-        shuffleIntArray(colors, rand);
+//        log("shuffling");
+//        shuffleIntArray(colors, rand);
 
         log("computing color values");
         colors = Arrays.copyOf(colors, w * h);
